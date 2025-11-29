@@ -1,0 +1,359 @@
+import { create } from 'zustand';
+import type { ChatBot } from '../types/galaxy';
+import { supabase } from '../lib/supabase';
+import * as api from '../lib/api';
+import type { RealtimeChannel } from '@supabase/supabase-js';
+import { XP_REWARDS } from '../lib/xp-utils';
+
+interface Message {
+    id: string;
+    role: 'user' | 'assistant';
+    content: string;
+    timestamp: number;
+}
+
+interface ChatState {
+    // Upload state
+    isUploading: boolean;
+    uploadProgress: number;
+    uploadStatus: 'idle' | 'extracting' | 'chunking' | 'embedding' | 'complete' | 'error';
+    isUploadModalOpen: boolean;
+
+    // UI state
+    isSidebarOpen: boolean;
+
+    // Chat state
+    messages: Message[];
+
+    // Chatbot state
+    chatbots: ChatBot[];
+    isLoadingChatbots: boolean;
+    newPlanetId: string | null; // For birth animation
+
+    // Real-time subscription
+    realtimeChannel: RealtimeChannel | null;
+
+    // XP state
+    xpToasts: Array<{
+        id: string;
+        botId: string;
+        xpAmount: number;
+        action: keyof typeof XP_REWARDS;
+        planetName: string;
+        timestamp: number;
+    }>;
+    levelUpQueue: Array<{
+        botId: string;
+        oldLevel: number;
+        newLevel: number;
+        planetName: string;
+    }>;
+
+    // Upload actions
+    setUploading: (isUploading: boolean) => void;
+    setUploadProgress: (progress: number) => void;
+    setUploadStatus: (status: ChatState['uploadStatus']) => void;
+    setUploadModalOpen: (isOpen: boolean) => void;
+
+    // UI actions
+    toggleSidebar: () => void;
+
+    // Chat actions
+    addMessage: (message: Message) => void;
+    clearMessages: () => void;
+
+    // Chatbot actions
+    loadChatbots: () => Promise<void>;
+    createChatbot: (name: string, description: string) => Promise<ChatBot>;
+    deleteChatbot: (id: string) => Promise<void>;
+    uploadStatus: 'idle',
+    isUploadModalOpen: false,
+    isSidebarOpen: true,
+    messages: [],
+    chatbots: [],
+    isLoadingChatbots: false,
+    newPlanetId: null,
+    realtimeChannel: null,
+    xpToasts: [],
+    levelUpQueue: [],
+
+    // Upload actions
+    setUploading: (isUploading) => set({ isUploading }),
+    setUploadProgress: (uploadProgress) => set({ uploadProgress }),
+    setUploadStatus: (uploadStatus) => set({ uploadStatus }),
+    setUploadModalOpen: (isUploadModalOpen) => set({ isUploadModalOpen }),
+
+    // UI actions
+    toggleSidebar: () => set((state) => ({ isSidebarOpen: !state.isSidebarOpen })),
+
+    // Chat actions
+    addMessage: (message) => set((state) => ({ messages: [...state.messages, message] })),
+    clearMessages: () => set({ messages: [] }),
+
+    // Chatbot actions
+    loadChatbots: async () => {
+        set({ isLoadingChatbots: true });
+        try {
+    const chatbots = await api.fetchUserChatbots();
+    set({ chatbots, isLoadingChatbots: false });
+} catch (error) {
+    console.error('Error loading chatbots:', error);
+    set({ isLoadingChatbots: false });
+}
+    },
+
+createChatbot: async (name: string, description: string) => {
+    try {
+        const newBot = await api.createChatbot({ name, description });
+
+        // Add to local state with newlyCreated flag
+        set((state) => ({
+            chatbots: [...state.chatbots, { ...newBot, isNewlyCreated: true }],
+            newPlanetId: newBot.id,
+        }));
+
+        return newBot;
+    } catch (error) {
+        console.error('Error creating chatbot:', error);
+        throw error;
+    }
+},
+
+    deleteChatbot: async (id: string) => {
+        try {
+            await api.deleteChatbot(id);
+
+            // Remove from local state
+            set((state) => ({
+                chatbots: state.chatbots.filter((bot) => bot.id !== id),
+            }));
+        } catch (error) {
+            console.error('Error deleting chatbot:', error);
+            throw error;
+        }
+    },
+
+        updateChatbotActivity: async (botId: string, activity: number) => {
+            try {
+                await api.updateChatbotActivity(botId, activity);
+
+                // Update local state
+                set((state) => ({
+                    chatbots: state.chatbots.map((bot) =>
+                        bot.id === botId
+                            ? { ...bot, planetData: { ...bot.planetData, activity } }
+                            : bot
+                    ),
+                }));
+            } catch (error) {
+                console.error('Error updating chatbot activity:', error);
+            }
+        },
+
+            clearNewPlanetId: () => set({ newPlanetId: null }),
+
+                // Real-time subscription
+                initializeRealtime: () => {
+                    const channel = supabase
+                        .channel('chatbots-changes')
+                        .on(
+                            'postgres_changes',
+                            {
+                                event: 'INSERT',
+                                schema: 'public',
+                                table: 'chatbots',
+                            },
+                            (payload) => {
+                                console.log('New chatbot detected:', payload);
+
+                                // Transform database record to ChatBot
+                                const dbBot = payload.new as any;
+                                const newBot: ChatBot = {
+                                    id: dbBot.id,
+                                    name: dbBot.name,
+                                    description: dbBot.description,
+                                    xp: dbBot.xp,
+                                    pdfCount: dbBot.pdf_count,
+                                    lastActivity: new Date(dbBot.last_activity),
+                                    planetData: {
+                                        orbitRadius: dbBot.orbit_radius,
+                                        orbitSpeed: dbBot.orbit_speed,
+                                        textureType: dbBot.texture_type,
+                                        size: dbBot.planet_size,
+                                        activity: dbBot.activity,
+                                        angleOffset: dbBot.angle_offset,
+                                    },
+                                    isNewlyCreated: true,
+                                };
+
+                                // Only add if not already in state (avoid duplicates from own creates)
+                                const currentBots = get().chatbots;
+                                if (!currentBots.find((bot) => bot.id === newBot.id)) {
+                                    set((state) => ({
+                                        chatbots: [...state.chatbots, newBot],
+                                        newPlanetId: newBot.id,
+                                    }));
+                                }
+                            }
+                        )
+                        .on(
+                            'postgres_changes',
+                            {
+                                event: 'UPDATE',
+                                schema: 'public',
+                                table: 'chatbots',
+                            },
+                            (payload) => {
+                                console.log('Chatbot updated:', payload);
+
+                                const dbBot = payload.new as any;
+                                const updatedBot: ChatBot = {
+                                    id: dbBot.id,
+                                    name: dbBot.name,
+                                    description: dbBot.description,
+                                    xp: dbBot.xp,
+                                    pdfCount: dbBot.pdf_count,
+                                    lastActivity: new Date(dbBot.last_activity),
+                                    planetData: {
+                                        orbitRadius: dbBot.orbit_radius,
+                                        orbitSpeed: dbBot.orbit_speed,
+                                        textureType: dbBot.texture_type,
+                                        size: dbBot.planet_size,
+                                        activity: dbBot.activity,
+                                        angleOffset: dbBot.angle_offset,
+                                    },
+                                };
+
+                                set((state) => ({
+                                    chatbots: state.chatbots.map((bot) =>
+                                        bot.id === updatedBot.id ? updatedBot : bot
+                                    ),
+                                }));
+                            }
+                        )
+                        .on(
+                            'postgres_changes',
+                            {
+                                event: 'DELETE',
+                                schema: 'public',
+                                table: 'chatbots',
+                            },
+                            (payload) => {
+                                console.log('Chatbot deleted:', payload);
+
+                                const deletedId = (payload.old as any).id;
+                                set((state) => ({
+                                    chatbots: state.chatbots.filter((bot) => bot.id !== deletedId),
+                                }));
+                            }
+                        )
+                        .subscribe();
+
+                    set({ realtimeChannel: channel });
+
+                    // Return cleanup function
+                    return () => {
+                        supabase.removeChannel(channel);
+                        set({ realtimeChannel: null });
+                    };
+                },
+
+                    // Legacy actions (for backward compatibility with existing code)
+                    addChatbot: (bot) => {
+                        // This is now deprecated - use createChatbot instead
+                        console.warn('addChatbot is deprecated, use createChatbot instead');
+
+                        // For now, just add to local state (won't persist)
+                        set((state) => ({
+                            chatbots: [
+                                ...state.chatbots,
+                                {
+                                    ...bot,
+                                    planetData: {
+                                        orbitRadius: 5,
+                                        orbitSpeed: 0.1,
+                                        textureType: 'ocean',
+                                        size: 0.5,
+                                        activity: 0.3,
+                                        angleOffset: Math.random() * Math.PI * 2,
+                                    },
+                                },
+                            ],
+                        }));
+                    },
+
+                        startUpload: () => {
+                            // Legacy mock upload - kept for backward compatibility
+                            set({ isUploading: true, uploadStatus: 'extracting', uploadProgress: 0 });
+                            setTimeout(() => set({ uploadStatus: 'chunking', uploadProgress: 30 }), 2000);
+                            setTimeout(() => set({ uploadStatus: 'embedding', uploadProgress: 60 }), 4000);
+                            setTimeout(() => set({ uploadStatus: 'complete', uploadProgress: 100 }), 6000);
+                        },
+
+                            // XP actions
+                            addXP: async (botId: string, xpAmount: number, action: keyof typeof XP_REWARDS) => {
+                                try {
+                                    // Find the bot to get its name
+                                    const bot = get().chatbots.find(b => b.id === botId);
+                                    if (!bot) {
+                                        console.error('Bot not found:', botId);
+                                        return;
+                                    }
+
+                                    // Add XP with level check
+                                    const result = await api.addXPWithLevelCheck(botId, xpAmount);
+
+                                    // Update local state with new bot data
+                                    set((state) => ({
+                                        chatbots: state.chatbots.map((b) =>
+                                            b.id === botId ? result.bot : b
+                                        ),
+                                    }));
+
+                                    // Show XP toast
+                                    const toastId = `${botId}-${Date.now()}`;
+                                    set((state) => ({
+                                        xpToasts: [
+                                            ...state.xpToasts,
+                                            {
+                                                id: toastId,
+                                                botId,
+                                                xpAmount,
+                                                action,
+                                                planetName: bot.name,
+                                                timestamp: Date.now(),
+                                            },
+                                        ],
+                                    }));
+
+                                    // If leveled up, add to queue for animation
+                                    if (result.leveledUp) {
+                                        set((state) => ({
+                                            levelUpQueue: [
+                                                ...state.levelUpQueue,
+                                                {
+                                                    botId,
+                                                    oldLevel: result.oldLevel,
+                                                    newLevel: result.newLevel,
+                                                    planetName: bot.name,
+                                                },
+                                            ],
+                                        }));
+                                    }
+                                } catch (error) {
+                                    console.error('Error adding XP:', error);
+                                }
+                            },
+
+                                dismissXPToast: (toastId: string) => {
+                                    set((state) => ({
+                                        xpToasts: state.xpToasts.filter((toast) => toast.id !== toastId),
+                                    }));
+                                },
+
+                                    clearLevelUpQueue: (botId: string) => {
+                                        set((state) => ({
+                                            levelUpQueue: state.levelUpQueue.filter((item) => item.botId !== botId),
+                                        }));
+                                    },
+}));

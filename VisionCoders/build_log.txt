@@ -1,0 +1,8 @@
+src/components/chat/AIInputWithSuggestions.tsx(3,10): error TS1484: 'LucideIcon' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+src/components/dashboard/DashboardHome.tsx(9,23): error TS6133: 'setUploadModalOpen' is declared but its value is never read.
+src/components/galaxy/AsteroidBelt.tsx(37,18): error TS2741: Property 'args' is missing in type '{ attach: string; count: number; array: Float32Array<ArrayBuffer>; itemSize: number; }' but required in type 'Mutable<Overwrite<Partial<Overwrite<BufferAttribute, MathProps<BufferAttribute> & ReactProps<BufferAttribute>>>, Omit<...>>>'.
+src/components/galaxy/CameraController.tsx(15,11): error TS6133: 'targetPosition' is declared but its value is never read.
+src/components/galaxy/Planet.tsx(27,5): error TS6133: 'activity' is declared but its value is never read.
+src/components/galaxy/Starfield.tsx(53,22): error TS2741: Property 'args' is missing in type '{ attach: string; count: number; array: Float32Array<ArrayBuffer>; itemSize: number; }' but required in type 'Mutable<Overwrite<Partial<Overwrite<BufferAttribute, MathProps<BufferAttribute> & ReactProps<BufferAttribute>>>, Omit<...>>>'.
+src/components/galaxy/Starfield.tsx(66,22): error TS2741: Property 'args' is missing in type '{ attach: string; count: number; array: Float32Array<ArrayBuffer>; itemSize: number; }' but required in type 'Mutable<Overwrite<Partial<Overwrite<BufferAttribute, MathProps<BufferAttribute> & ReactProps<BufferAttribute>>>, Omit<...>>>'.
+src/components/upload/UploadModal.tsx(14,26): error TS6133: 'uploadStatus' is declared but its value is never read.
