@@ -48,7 +48,8 @@ class ApiService {
       
       if (!response.ok) {
         const error = await response.json().catch(() => ({ error: 'An error occurred' }));
-        throw new Error(error.error || `HTTP error! status: ${response.status}`);
+        const errorMessage = error.details || error.error || `HTTP error! status: ${response.status}`;
+        throw new Error(errorMessage);
       }
 
       return await response.json();

@@ -30,8 +30,14 @@ export async function GET(req: NextRequest) {
     return addCorsHeaders(response, req);
   } catch (error: any) {
     console.error("Error fetching cameras:", error);
+    const errorMessage = error?.message || "Unknown error";
+    const errorStack = error?.stack || "";
     const errorResponse = NextResponse.json(
-      { error: "Failed to fetch cameras", details: error.message },
+      { 
+        error: "Failed to fetch cameras", 
+        details: errorMessage,
+        ...(process.env.NODE_ENV === 'development' && { stack: errorStack })
+      },
       { status: 500 }
     );
     return addCorsHeaders(errorResponse, req);
@@ -92,8 +98,14 @@ export async function POST(req: NextRequest) {
       );
       return addCorsHeaders(errorResponse, req);
     }
+    const errorMessage = error?.message || "Unknown error";
+    const errorStack = error?.stack || "";
     const errorResponse = NextResponse.json(
-      { error: "Failed to create camera", details: error.message },
+      { 
+        error: "Failed to create camera", 
+        details: errorMessage,
+        ...(process.env.NODE_ENV === 'development' && { stack: errorStack })
+      },
       { status: 500 }
     );
     return addCorsHeaders(errorResponse, req);

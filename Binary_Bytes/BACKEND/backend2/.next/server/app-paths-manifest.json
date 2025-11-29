@@ -1,1 +1,7 @@
-{}
+{
+  "/api/cameras/route": "app/api/cameras/route.js",
+  "/api/threats/route": "app/api/threats/route.js",
+  "/api/scans/route": "app/api/scans/route.js",
+  "/api/threats/[id]/route": "app/api/threats/[id]/route.js",
+  "/api/auth/login/route": "app/api/auth/login/route.js"
+}

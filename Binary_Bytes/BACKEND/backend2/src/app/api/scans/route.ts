@@ -75,12 +75,14 @@ export async function POST(req: NextRequest) {
     
     const token = getAuthToken(req);
     if (!token) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      const errorResponse = NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return addCorsHeaders(errorResponse, req);
     }
 
     const decoded = verifyToken(token);
     if (!decoded) {
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+      const errorResponse = NextResponse.json({ error: "Invalid token" }, { status: 401 });
+      return addCorsHeaders(errorResponse, req);
     }
 
     const body = await req.json();

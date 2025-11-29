@@ -22,7 +22,6 @@ const cached = global.mongooseCache || { conn: null, promise: null };
 global.mongooseCache = cached;
 
 export async function dbConnect(): Promise<Mongoose> {
-
   if (cached.conn) {
     return cached.conn;
   }
@@ -39,9 +38,10 @@ export async function dbConnect(): Promise<Mongoose> {
 
   try {
     cached.conn = await cached.promise;
-  } catch (err) {
+  } catch (err: any) {
     cached.promise = null;
-    throw err;
+    console.error('MongoDB connection error:', err);
+    throw new Error(`Database connection failed: ${err?.message || 'Unknown error'}`);
   }
 
   return cached.conn;
